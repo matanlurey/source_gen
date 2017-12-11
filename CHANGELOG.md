@@ -1,3 +1,13 @@
+## 0.7.3
+
+* Added `TypeReference` and `new TypeChecker.fromReference`.
+
+Prior to this change it was impossible to refer to a Type's generic arguments;
+for example creating a checker that refers to `List<String>`. This is now
+supported implicitly in `new TypeChecker.fromUrl`, where it takes a second
+optional parameter `List<dynamic>`, where elements may be either a `String`, a
+`Uri`, or a `TypeReference`.
+
 ## 0.7.2+1
 
 * Allow `package:build` version 0.11.0

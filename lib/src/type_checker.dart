@@ -8,6 +8,7 @@ import 'package:analyzer/dart/constant/value.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 
+import 'type_reference.dart';
 import 'utils.dart';
 
 /// An abstraction around doing static type checking at compile/build time.
@@ -50,7 +51,17 @@ abstract class TypeChecker {
   /// `export` directives). You should ideally only use `fromUrl` when you know
   /// the full path (likely you own/control the package) or it is in a stable
   /// package like in the `dart:` SDK.
-  const factory TypeChecker.fromUrl(dynamic url) = _UriTypeChecker;
+  const factory TypeChecker.fromUrl(
+    dynamic url, [
+    List<dynamic> typeArguments,
+  ]) = _UriTypeChecker;
+
+  /// Create a new [TypeChecker] backed by a [TypeReference].
+  ///
+  /// This is similar to [TypeChecker.fromUrl], but allows expressing generic
+  /// type arguments.
+  const factory TypeChecker.fromReference(TypeReference type) =
+      _ReferenceTypeChecker;
 
   /// Returns the first constant annotating [element] assignable to this type.
   ///
@@ -228,10 +239,14 @@ class _MirrorTypeChecker extends TypeChecker {
 class _UriTypeChecker extends TypeChecker {
   final String _url;
 
+  // FIXME: Support typeArguments.
+  // ignore: unused_field
+  final List<dynamic> _typeArguments;
+
   // Precomputed cache of String --> Uri.
   static final _cache = new Expando<Uri>();
 
-  const _UriTypeChecker(dynamic url)
+  const _UriTypeChecker(dynamic url, [this._typeArguments = const []])
       : _url = '$url',
         super._();
 
@@ -254,6 +269,31 @@ class _UriTypeChecker extends TypeChecker {
 
   @override
   String toString() => '$uri';
+}
+
+// Checks a runtime type against an Uri and Symbol, with type argument support.
+class _ReferenceTypeChecker extends TypeChecker {
+  final TypeReference _reference;
+
+  const _ReferenceTypeChecker(this._reference) : super._();
+
+  @override
+  bool isExactly(Element element) {
+    if (element is ClassElement) {
+      final type = element.type;
+      // Basic symbol/library is not the same.
+      if (normalizeUrl(element.source.uri) != _reference.type) {
+        return false;
+      }
+      // Different number of type arguments.
+      if (type.typeArguments.length != _reference.typeArguments.length) {
+        return false;
+      }
+      // FIXME: Check the individual type arguments, don't just return false.
+      return false;
+    }
+    return false;
+  }
 }
 
 class _AnyChecker extends TypeChecker {
