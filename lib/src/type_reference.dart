@@ -2,6 +2,8 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
+import 'package:collection/collection.dart';
+
 /// Represents a static [Type] in a yet-to-be-resolved Dart library or package.
 ///
 /// Unlike the analyzer's `DartType` representation, a [TypeReference] is based
@@ -28,4 +30,26 @@ class TypeReference {
   }
 
   const TypeReference._(this.type, this.typeArguments);
+
+  static final _equals = const ListEquality<TypeReference>().equals;
+  static final _hash = const ListEquality<TypeReference>().hash;
+
+  @override
+  bool operator ==(Object o) {
+    if (o is TypeReference) {
+      return o.type == type && _equals(o.typeArguments, typeArguments);
+    }
+    return false;
+  }
+
+  @override
+  int get hashCode => type.hashCode ^ _hash(typeArguments);
+
+  @override
+  String toString() {
+    if (typeArguments.isEmpty) {
+      return '$type';
+    }
+    return '$type<${typeArguments.join(', ')}>';
+  }
 }

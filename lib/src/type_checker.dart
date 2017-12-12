@@ -40,9 +40,31 @@ abstract class TypeChecker {
   /// Create a new [TypeChecker] backed by a library [url].
   ///
   /// Example of referring to a `LinkedHashMap` from `dart:collection`:
-  /// ```dart
+  /// ```
   /// const linkedHashMap = const TypeChecker.fromUrl(
   ///   'dart:collection#LinkedHashMap',
+  /// );
+  /// ```
+  ///
+  /// Or `List<String>`:
+  /// ```
+  /// const listOfString = const TypeChecker.fromUrl(
+  ///   'dart:core#List', const ['dart:core#String'],
+  /// );
+  /// ```
+  ///
+  /// To pass _nested_ generic type arguments, use a [TypeReference]:
+  /// ```
+  /// const listOfListOfString = const TypeChecker.fromUrl(
+  ///   'dart:core#List',
+  ///   const [
+  ///     const TypeReference(
+  ///       'dart:core#List',
+  ///       const [
+  ///         'dart:core#String',
+  ///       ],
+  ///     ),
+  ///   ],
   /// );
   /// ```
   ///
@@ -55,13 +77,6 @@ abstract class TypeChecker {
     dynamic url, [
     List<dynamic> typeArguments,
   ]) = _UriTypeChecker;
-
-  /// Create a new [TypeChecker] backed by a [TypeReference].
-  ///
-  /// This is similar to [TypeChecker.fromUrl], but allows expressing generic
-  /// type arguments.
-  const factory TypeChecker.fromReference(TypeReference type) =
-      _ReferenceTypeChecker;
 
   /// Returns the first constant annotating [element] assignable to this type.
   ///
@@ -238,13 +253,10 @@ class _MirrorTypeChecker extends TypeChecker {
 // Checks a runtime type against an Uri and Symbol.
 class _UriTypeChecker extends TypeChecker {
   final String _url;
-
-  // FIXME: Support typeArguments.
-  // ignore: unused_field
   final List<dynamic> _typeArguments;
 
   // Precomputed cache of String --> Uri.
-  static final _cache = new Expando<Uri>();
+  static final _uriCache = new Expando<Uri>();
 
   const _UriTypeChecker(dynamic url, [this._typeArguments = const []])
       : _url = '$url',
@@ -257,43 +269,35 @@ class _UriTypeChecker extends TypeChecker {
   int get hashCode => _url.hashCode;
 
   /// Url as a [Uri] object, lazily constructed.
-  Uri get uri => _cache[this] ??= normalizeUrl(Uri.parse(_url));
+  Uri get uri => _uriCache[this] ??= normalizeUrl(Uri.parse(_url));
 
-  /// Returns whether this type represents the same as [url].
-  bool hasSameUrl(dynamic url) =>
-      uri.toString() ==
-      (url is String ? url : normalizeUrl(url as Uri).toString());
+  /// Returns whether both [a] and [b] are the same URLs.
+  static bool _hasSameUrl(dynamic a, dynamic b) =>
+      (a is String ? a : normalizeUrl(a as Uri).toString()) ==
+      (b is String ? b : normalizeUrl(b as Uri).toString());
+
+  bool hasSameTypeArgs(List<dynamic> args) {
+    if (args.length != _typeArguments.length) {
+      return false;
+    }
+    for (var i = 0; i < args.length; i++) {
+      final a = args[i];
+      final b = _typeArguments[i];
+      if (a is String || a is Uri && b is String || b is Uri) {
+        return _hasSameUrl(a, b);
+      }
+      if (a is TypeReference && b is TypeReference) {
+
+      }
+    }
+    return true;
+  }
 
   @override
-  bool isExactly(Element element) => hasSameUrl(urlOfElement(element));
+  bool isExactly(Element element) => _hasSameUrl(_url, urlOfElement(element));
 
   @override
   String toString() => '$uri';
-}
-
-// Checks a runtime type against an Uri and Symbol, with type argument support.
-class _ReferenceTypeChecker extends TypeChecker {
-  final TypeReference _reference;
-
-  const _ReferenceTypeChecker(this._reference) : super._();
-
-  @override
-  bool isExactly(Element element) {
-    if (element is ClassElement) {
-      final type = element.type;
-      // Basic symbol/library is not the same.
-      if (normalizeUrl(element.source.uri) != _reference.type) {
-        return false;
-      }
-      // Different number of type arguments.
-      if (type.typeArguments.length != _reference.typeArguments.length) {
-        return false;
-      }
-      // FIXME: Check the individual type arguments, don't just return false.
-      return false;
-    }
-    return false;
-  }
 }
 
 class _AnyChecker extends TypeChecker {
